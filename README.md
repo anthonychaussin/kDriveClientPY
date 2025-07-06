@@ -1,4 +1,4 @@
-# 📦 kdrive_client
+# 📦 kDriveClientPY
 
 Python SDK for the [Infomaniak kDrive API](https://www.infomaniak.com/en/support/faq/admin2/kdrive).
 
