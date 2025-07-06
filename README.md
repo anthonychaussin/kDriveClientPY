@@ -19,7 +19,7 @@ Python SDK for the [Infomaniak kDrive API](https://www.infomaniak.com/en/support
 ## 💡 Installation
 
 ```bash
-pip install kdrive_client
+pip install kDriveClientPY
 ```
 
 ---
