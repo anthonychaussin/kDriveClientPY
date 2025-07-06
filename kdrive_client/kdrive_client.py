@@ -162,7 +162,10 @@ class KDriveClient:
                 self._request("POST", url, params=params, data=chunk.content)
             except Exception as e:
                 self.cancel_upload_session(token)
-                raise KDriveApiError(f"Error uploading chunk : {str(e)}", False) from e
+                raise KDriveApiError(
+                    f"Error uploading chunk : {str(e)}",
+                    False
+                ) from e
 
         return self.finish_upload_session(token, file.get_total_hash())
 
@@ -187,31 +190,35 @@ class KDriveClient:
         """Initialize upload strategy."""
 
         dummy_data = bytes(random.getrandbits(8) for _ in range(1024 * 1024))  # 1MB
-        body = {
-            "file_name": "speedtest.dat",
-            "total_size": len(dummy_data),
-            "total_chunks": 1,
-            "directory_path": "/Private",
-            "conflict": "rename",
-        }
+        start_resp = self._request(
+            "POST",
+            f"/3/drive/{self.drive_id}/upload/session/start",
+            json={
+                "file_name": "speedtest.dat",
+                "total_size": len(dummy_data),
+                "total_chunks": 1,
+                "directory_path": "/Private",
+                "conflict": "rename",
+            })
 
-        start_resp = self._request("POST", f"/3/drive/{self.drive_id}/upload/session/start", json=body)
         data = start_resp.json()["data"]
         token = data["token"]
         upload_url = data["upload_url"]
 
-        chunk_url = f"{upload_url}/3/drive/{self.drive_id}/upload/session/{token}/chunk"
-        params = {
-            "chunk_number": 1,
-            "chunk_size": len(dummy_data),
-        }
-
         start = time.perf_counter()
-        self._request("POST", chunk_url, params=params, data=dummy_data)
+        self._request(
+            "POST",
+            f"{upload_url}/3/drive/{self.drive_id}/upload/session/{token}/chunk",
+            params={
+                "chunk_number": 1,
+                "chunk_size": len(dummy_data),
+            },
+            data=dummy_data)
         elapsed = time.perf_counter() - start
 
-        cancel_url = f"/2/drive/{self.drive_id}/upload/session/{token}"
-        self._request("DELETE", cancel_url)
+        self._request(
+            "DELETE",
+            f"/2/drive/{self.drive_id}/upload/session/{token}")
 
         speed_bps = len(dummy_data) / elapsed
         self.direct_upload_threshold = int(speed_bps)
