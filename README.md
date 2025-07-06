@@ -27,12 +27,13 @@ pip install kDriveClientPY
 ## 🚀 Quick Start
 
 ```python
-from kdrive_client import kdrive_client, kdrive_file
+from kdrive_client.kdrive_client import KDriveClient
+from kdrive_client.kdrive_file import KDriveFile
 
 client = KDriveClient(token="your-token", drive_id=123456)
 
 # Upload
-file = KDriveFile("example.txt", directory_path="/Private")
+file = KDriveFile("example.txt", "/Private")
 response = client.upload(file)
 print("Uploaded file ID:", response["id"])
 
