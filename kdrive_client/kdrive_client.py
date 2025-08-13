@@ -33,7 +33,7 @@ class KDriveClient:
             version = importlib.metadata.version("kDriveClientPY")
         except importlib.metadata.PackageNotFoundError:
             version = "dev"
-        user_agent = f"kDriveClient.PY/{app_version}"
+        user_agent = f"kDriveClient.PY/{version}"
         self.session.headers.update({"Authorization": f"Bearer {token}", "User-Agent": user_agent})
         self._rate_limit_lock = Lock()
         self._rate_limit_reset = time.time()
