@@ -48,7 +48,7 @@ class KDriveFile:
 
         params = {
             "file_name": os.path.basename(self.path).replace("/", ":"),
-            "created_date": str(int(stat.st_birthtime)),
+            "created_date": str(int(getattr(stat, "st_birthtime", stat.st_ctime))),
             "last_modified_at": str(int(stat.st_mtime))
         }
         if directory_id:
