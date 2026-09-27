@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "kdrive_client"
+name = "kDriveClientPY"
 version = "2.3.1"
 description = "Python SDK for Infomaniak kDrive API (parity with DriveClient C#)"
 authors = [

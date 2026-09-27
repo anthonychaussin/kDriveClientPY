@@ -11,11 +11,11 @@ SDK Python pour l'API Infomaniak kDrive — aligné sur l'architecture du SDK C#
 ## Installation
 
 ```bash
-pip install kdrive_client
+pip install kDriveClientPY
 # optionnel : hash XXH3 plus rapide
-pip install kdrive_client[xxh]
+pip install kDriveClientPY[xxh]
 # optionnel : prepare async / httpx
-pip install kdrive_client[async]
+pip install kDriveClientPY[async]
 ```
 
 Depuis les sources :
@@ -27,7 +27,7 @@ pip install -e ".[dev]"
 
 Token API : [Manager Infomaniak](https://manager.infomaniak.com/v3/ng/accounts/token/list) (scope `drive`).
 
-Publication PyPI : package `kdrive_client` (PEP 561 / `py.typed`).
+Publication PyPI : package `kDriveClientPY` (import `kdrive_client`, PEP 561 / `py.typed`).
 
 ## Usage
 
