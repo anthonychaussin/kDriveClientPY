@@ -28,17 +28,39 @@ class AsyncKDriveClient:
         max_retries: int = DEFAULT_MAX_RETRIES,
         rate_limit: int = REQUESTS_PER_MINUTE,
         use_auto_chunk_size: bool = False,
+        auto_max_workers: bool = False,
+        safe_mode: bool = False,
+        target_seconds: float = 3.0,
+        min_chunk_size: Optional[int] = None,
+        max_chunk_size: Optional[int] = None,
+        direct_upload_factor: float = 15.0,
+        safe_max_workers: int = 2,
+        safe_max_chunk_size: int = 8 * 1024 * 1024,
+        safe_direct_upload_threshold: int = 2 * 1024 * 1024,
+        max_ram_bytes: Optional[int] = None,
     ):
-        self._sync = KDriveClient(
-            token,
-            drive_id,
-            base_url=base_url,
-            parallelism=parallelism,
-            timeout=timeout,
-            max_retries=max_retries,
-            rate_limit=rate_limit,
-            use_auto_chunk_size=use_auto_chunk_size,
-        )
+        kwargs = {
+            "base_url": base_url,
+            "parallelism": parallelism,
+            "timeout": timeout,
+            "max_retries": max_retries,
+            "rate_limit": rate_limit,
+            "use_auto_chunk_size": use_auto_chunk_size,
+            "auto_max_workers": auto_max_workers,
+            "safe_mode": safe_mode,
+            "target_seconds": target_seconds,
+            "direct_upload_factor": direct_upload_factor,
+            "safe_max_workers": safe_max_workers,
+            "safe_max_chunk_size": safe_max_chunk_size,
+            "safe_direct_upload_threshold": safe_direct_upload_threshold,
+        }
+        if min_chunk_size is not None:
+            kwargs["min_chunk_size"] = min_chunk_size
+        if max_chunk_size is not None:
+            kwargs["max_chunk_size"] = max_chunk_size
+        if max_ram_bytes is not None:
+            kwargs["max_ram_bytes"] = max_ram_bytes
+        self._sync = KDriveClient(token, drive_id, **kwargs)
         self._cancelled = False
         self._sync.cancel_check = lambda: self._cancelled
 

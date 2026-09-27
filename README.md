@@ -109,7 +109,7 @@ kdrive_client/
   py.typed
 ```
 
-User-Agent : `kdrive_client/2.3.0`. Logging : logger `kdrive_client`.
+User-Agent : `kdrive_client/2.3.1`. Logging : logger `kdrive_client`.
 
 ### Smart DX 2.3
 
@@ -120,6 +120,7 @@ User-Agent : `kdrive_client/2.3.0`. Logging : logger `kdrive_client`.
 - Agrégateurs : `search_all`, `list_all_invitations`, `list_trash_children_all`, `list_versions_all`, activités
 - `copy_between_drives(wait=True)`, `find_trash_item` ranking, `wait_for_archive`
 - `list_all_comments` / `users` / `categories` typés
+- Upload tuning (2.3.1) : `safe_mode`, `auto_max_workers`, `max_ram_bytes`, `target_seconds`, …
 
 ### Polish 2.2
 

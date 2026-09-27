@@ -18,6 +18,8 @@ DEFAULT_CHUNK_SIZE = 1024 * 1024  # 1 MiB
 MIN_CHUNK_SIZE = 1024 * 1024
 MAX_CHUNK_SIZE = 100 * 1024 * 1024
 PROBE_BYTES = 256 * 1024
+ONE_MB = 1024 * 1024
+ONE_GB = 1024 * ONE_MB
 
 
 def _resolve_hasher(algorithm: HashAlgorithm):
@@ -32,24 +34,35 @@ def _resolve_hasher(algorithm: HashAlgorithm):
     return "sha256", hashlib.sha256
 
 
-def suggest_chunk_size(bytes_per_second: float, parallelism: int = 4) -> int:
+def suggest_chunk_size(
+    bytes_per_second: float,
+    parallelism: int = 4,
+    *,
+    target_seconds: float = 2.0,
+    min_chunk_size: int = MIN_CHUNK_SIZE,
+    max_chunk_size: int = MAX_CHUNK_SIZE,
+) -> int:
     """Pick a chunk size from a measured upload bandwidth (bytes/s)."""
     if bytes_per_second <= 0:
-        return DEFAULT_CHUNK_SIZE
-    # Target ~2s per parallel wave
-    raw = int(bytes_per_second * 2 / max(1, parallelism))
-    aligned = max(MIN_CHUNK_SIZE, min(MAX_CHUNK_SIZE, raw))
+        return max(min_chunk_size, DEFAULT_CHUNK_SIZE)
+    raw = int(bytes_per_second * target_seconds / max(1, parallelism))
+    aligned = max(min_chunk_size, min(max_chunk_size, raw))
     # Round down to 256 KiB boundary
-    return max(MIN_CHUNK_SIZE, (aligned // (256 * 1024)) * (256 * 1024))
+    return max(min_chunk_size, (aligned // (256 * 1024)) * (256 * 1024))
 
 
-def suggest_direct_threshold(bytes_per_second: float) -> int:
-    """Derive direct-vs-chunked threshold from bandwidth (capped around API 100 MiB advice)."""
+def suggest_direct_threshold(
+    bytes_per_second: float,
+    *,
+    direct_upload_factor: float = 15.0,
+    min_threshold: int = 10 * 1024 * 1024,
+    max_threshold: int = DEFAULT_CHUNK_THRESHOLD,
+) -> int:
+    """Derive direct-vs-chunked threshold from bandwidth."""
     if bytes_per_second <= 0:
-        return DEFAULT_CHUNK_THRESHOLD
-    # Aim for ~15s max for a direct upload
-    raw = int(bytes_per_second * 15)
-    return max(10 * 1024 * 1024, min(DEFAULT_CHUNK_THRESHOLD, raw))
+        return max_threshold
+    raw = int(bytes_per_second * direct_upload_factor)
+    return max(min_threshold, min(max_threshold, raw))
 
 
 class UploadCancelled(Exception):
@@ -62,8 +75,19 @@ class UploadMixin:
     parallelism: int
     progress_callback: Optional[Callable[[float], None]]
     use_auto_chunk_size: bool
+    auto_max_workers: bool
+    safe_mode: bool
+    target_seconds: float
+    min_chunk_size: int
+    max_chunk_size: int
+    direct_upload_factor: float
+    safe_max_workers: int
+    safe_max_chunk_size: int
+    safe_direct_upload_threshold: int
+    max_ram_bytes: int
     dynamic_chunk_size: Optional[int]
     dynamic_chunk_threshold: Optional[int]
+    measured_speed_bps: Optional[float]
     cancel_check: Optional[Callable[[], bool]]
 
     def measure_upload_bandwidth(self, sample_size: int = PROBE_BYTES) -> float:
@@ -89,11 +113,33 @@ class UploadMixin:
             return
         try:
             bps = self.measure_upload_bandwidth()
-            self.dynamic_chunk_size = suggest_chunk_size(bps, self.parallelism)
-            self.dynamic_chunk_threshold = suggest_direct_threshold(bps)
+            self.measured_speed_bps = bps
+            self.dynamic_chunk_size = suggest_chunk_size(
+                bps,
+                self.parallelism,
+                target_seconds=self.target_seconds,
+                min_chunk_size=self.min_chunk_size,
+                max_chunk_size=self.max_chunk_size,
+            )
+            self.dynamic_chunk_threshold = suggest_direct_threshold(
+                bps,
+                direct_upload_factor=self.direct_upload_factor,
+            )
+            if self.safe_mode:
+                self.dynamic_chunk_size = min(self.dynamic_chunk_size, self.safe_max_chunk_size)
+                self.dynamic_chunk_threshold = min(
+                    self.dynamic_chunk_threshold,
+                    self.safe_direct_upload_threshold,
+                )
         except Exception:
             self.dynamic_chunk_size = DEFAULT_CHUNK_SIZE
             self.dynamic_chunk_threshold = DEFAULT_CHUNK_THRESHOLD
+            if self.safe_mode:
+                self.dynamic_chunk_size = min(self.dynamic_chunk_size, self.safe_max_chunk_size)
+                self.dynamic_chunk_threshold = min(
+                    self.dynamic_chunk_threshold,
+                    self.safe_direct_upload_threshold,
+                )
 
     def resolve_chunk_size(
         self,
@@ -102,12 +148,20 @@ class UploadMixin:
         use_auto_chunk_size: Optional[bool] = None,
     ) -> int:
         if chunk_size is not None:
-            return max(MIN_CHUNK_SIZE, chunk_size)
-        auto = self.use_auto_chunk_size if use_auto_chunk_size is None else use_auto_chunk_size
-        if auto:
-            self._ensure_auto_sizing()
-            return self.dynamic_chunk_size or DEFAULT_CHUNK_SIZE
-        return DEFAULT_CHUNK_SIZE
+            size = max(self.min_chunk_size, chunk_size)
+        else:
+            auto = self.use_auto_chunk_size if use_auto_chunk_size is None else use_auto_chunk_size
+            if auto:
+                self._ensure_auto_sizing()
+                size = self.dynamic_chunk_size or DEFAULT_CHUNK_SIZE
+            else:
+                size = DEFAULT_CHUNK_SIZE
+        size = min(size, self.max_chunk_size)
+        if self.safe_mode:
+            size = min(size, self.safe_max_chunk_size)
+        # Cap so at least one chunk buffer fits in RAM budget
+        size = min(size, max(self.min_chunk_size, self.max_ram_bytes))
+        return max(self.min_chunk_size, size)
 
     def resolve_chunk_threshold(
         self,
@@ -116,12 +170,48 @@ class UploadMixin:
         use_auto_chunk_size: Optional[bool] = None,
     ) -> int:
         if chunk_threshold is not None:
-            return chunk_threshold
-        auto = self.use_auto_chunk_size if use_auto_chunk_size is None else use_auto_chunk_size
-        if auto:
-            self._ensure_auto_sizing()
-            return self.dynamic_chunk_threshold or DEFAULT_CHUNK_THRESHOLD
-        return DEFAULT_CHUNK_THRESHOLD
+            threshold = chunk_threshold
+        else:
+            auto = self.use_auto_chunk_size if use_auto_chunk_size is None else use_auto_chunk_size
+            if auto:
+                self._ensure_auto_sizing()
+                threshold = self.dynamic_chunk_threshold or DEFAULT_CHUNK_THRESHOLD
+            else:
+                threshold = DEFAULT_CHUNK_THRESHOLD
+        if self.safe_mode:
+            threshold = min(threshold, self.safe_direct_upload_threshold)
+        return threshold
+
+    def compute_upload_workers(self, *, chunk_size: int, total_chunks: int) -> int:
+        """Resolve parallelism for a chunked upload (auto workers + safe + RAM)."""
+        workers = max(1, self.parallelism)
+        if self.auto_max_workers:
+            workers = self._compute_auto_workers(total_chunks)
+        if self.safe_mode:
+            workers = min(workers, self.safe_max_workers)
+        workers = min(workers, self._max_workers_by_ram(chunk_size))
+        return max(1, workers)
+
+    def _compute_auto_workers(self, total_chunks: int) -> int:
+        max_workers = max(self.parallelism, 1)
+        if total_chunks <= 1:
+            return 1
+        speed = self.measured_speed_bps
+        if speed is not None:
+            if speed < 2 * ONE_MB:
+                return 1
+            if speed < 5 * ONE_MB:
+                return min(2, max_workers)
+        if total_chunks < 4:
+            return min(2, max_workers)
+        if total_chunks < 8:
+            return min(4, max_workers)
+        return min(8, max_workers)
+
+    def _max_workers_by_ram(self, chunk_size: int) -> int:
+        if chunk_size <= 0:
+            return 1
+        return max(1, int(self.max_ram_bytes // chunk_size))
 
     def _raise_if_cancelled(self) -> None:
         check = getattr(self, "cancel_check", None)
@@ -139,11 +229,12 @@ class UploadMixin:
         hash_algorithm: HashAlgorithm = "sha256",
         use_auto_chunk_size: Optional[bool] = None,
     ) -> DriveFile:
+        # Files >= 1 GiB always go chunked (API / reliability)
         resolved = self.resolve_chunk_size(chunk_size, use_auto_chunk_size=use_auto_chunk_size)
         threshold = self.resolve_chunk_threshold(
             chunk_threshold, use_auto_chunk_size=use_auto_chunk_size
         )
-        if file.total_size > threshold:
+        if file.total_size >= ONE_GB or file.total_size > threshold:
             return self.upload_chunked(
                 file,
                 chunk_size=resolved,
@@ -226,7 +317,7 @@ class UploadMixin:
         chunk_digests: List[bytes] = []
         uploaded = 0
         progress_lock = threading.Lock()
-        workers = max(1, self.parallelism)
+        workers = self.compute_upload_workers(chunk_size=chunk_size, total_chunks=total_chunks)
 
         def _send_chunk(item: tuple) -> int:
             self._raise_if_cancelled()

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.3.1
+
+Port des réglages upload du WIP 1.x local (`KdriveClientPY`).
+
+- `safe_mode`, `auto_max_workers`, `target_seconds`, `min_chunk_size` / `max_chunk_size`
+- `direct_upload_factor`, seuils safe, `max_ram_bytes` (plafond buffers concurrents)
+- `compute_upload_workers` + force chunked au-delà de 1 GiB
+- `.env.example`, exemple avec chargement `.env`, `AGENTS.md`
+
 ## 2.3.0
 
 Smart DX — workflows chemins / arborescence.

@@ -14,7 +14,7 @@ from .http import DEFAULT_MAX_RETRIES, DEFAULT_TIMEOUT, REQUESTS_PER_MINUTE, Htt
 from .shares import SharesMixin
 from .smart import SmartMixin
 from .trash import TrashMixin
-from .upload import UploadMixin
+from .upload import MAX_CHUNK_SIZE, MIN_CHUNK_SIZE, ONE_GB, UploadMixin
 
 logger = logging.getLogger("kdrive_client")
 
@@ -44,6 +44,17 @@ class KDriveClient(
         max_retries: int = DEFAULT_MAX_RETRIES,
         rate_limit: int = REQUESTS_PER_MINUTE,
         use_auto_chunk_size: bool = False,
+        *,
+        auto_max_workers: bool = False,
+        safe_mode: bool = False,
+        target_seconds: float = 3.0,
+        min_chunk_size: int = MIN_CHUNK_SIZE,
+        max_chunk_size: int = MAX_CHUNK_SIZE,
+        direct_upload_factor: float = 15.0,
+        safe_max_workers: int = 2,
+        safe_max_chunk_size: int = 8 * 1024 * 1024,
+        safe_direct_upload_threshold: int = 2 * 1024 * 1024,
+        max_ram_bytes: int = ONE_GB,
     ):
         HttpPipeline.__init__(
             self,
@@ -58,10 +69,42 @@ class KDriveClient(
         self.progress_callback: Optional[Callable[[float], None]] = None
         self.download_progress_callback: Optional[Callable[[float], None]] = None
         self.use_auto_chunk_size = use_auto_chunk_size
+        self.auto_max_workers = auto_max_workers
+        self.safe_mode = safe_mode
+        self.target_seconds = float(target_seconds)
+        self.min_chunk_size = int(min_chunk_size)
+        self.max_chunk_size = int(max_chunk_size)
+        self.direct_upload_factor = float(direct_upload_factor)
+        self.safe_max_workers = max(1, int(safe_max_workers))
+        self.safe_max_chunk_size = int(safe_max_chunk_size)
+        self.safe_direct_upload_threshold = int(safe_direct_upload_threshold)
+        self.max_ram_bytes = int(max_ram_bytes)
         self.dynamic_chunk_size: Optional[int] = None
         self.dynamic_chunk_threshold: Optional[int] = None
+        self.measured_speed_bps: Optional[float] = None
         self.cancel_check: Optional[Callable[[], bool]] = None
+        self._validate_upload_config()
         logger.debug("KDriveClient %s initialized for drive %s", __version__, self.drive_id)
+
+    def _validate_upload_config(self) -> None:
+        if self.parallelism < 1:
+            raise ValueError("parallelism must be >= 1")
+        if self.safe_max_workers < 1:
+            raise ValueError("safe_max_workers must be >= 1")
+        if self.target_seconds <= 0:
+            raise ValueError("target_seconds must be > 0")
+        if self.min_chunk_size <= 0:
+            raise ValueError("min_chunk_size must be > 0")
+        if self.max_chunk_size < self.min_chunk_size:
+            raise ValueError("max_chunk_size must be >= min_chunk_size")
+        if self.direct_upload_factor <= 0:
+            raise ValueError("direct_upload_factor must be > 0")
+        if self.safe_max_chunk_size < self.min_chunk_size:
+            raise ValueError("safe_max_chunk_size must be >= min_chunk_size")
+        if self.safe_direct_upload_threshold <= 0:
+            raise ValueError("safe_direct_upload_threshold must be > 0")
+        if self.max_ram_bytes <= 0:
+            raise ValueError("max_ram_bytes must be > 0")
 
     def __enter__(self) -> "KDriveClient":
         return self
