@@ -17,7 +17,7 @@ htmlcov/
 venv/
 .env
 .idea/
-.vs/
+
 *.user
 *.suo
 
