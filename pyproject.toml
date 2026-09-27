@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kdrive_client"
+version = "2.3.0"
+description = "Python SDK for Infomaniak kDrive API (parity with DriveClient C#)"
+authors = [
+    { name = "Anthony Chaussin", email = "chaussin.anthony@gmail.com" }
+]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.9"
+keywords = ["infomaniak", "kdrive", "api", "sdk", "cloud", "storage"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+dependencies = [
+    "requests>=2.28",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "responses>=0.25",
+]
+xxh = [
+    "xxhash>=3.0",
+]
+async = [
+    "httpx>=0.27",
+]
+
+[project.urls]
+Homepage = "https://github.com/anthonychaussin/kDriveClientPY"
+Documentation = "https://developer.infomaniak.com/docs/api"
+Issues = "https://github.com/anthonychaussin/kDriveClientPY/issues"
+Changelog = "https://github.com/anthonychaussin/kDriveClientPY/blob/master/CHANGELOG.md"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["kdrive_client*"]
+
+[tool.setuptools.package-data]
+kdrive_client = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: live API tests (requires KDRIVE_TOKEN and KDRIVE_DRIVE_ID)",
+]
+asyncio_mode = "auto"

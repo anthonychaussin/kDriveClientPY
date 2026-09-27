@@ -1,0 +1,26 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Envs / IDE
+.venv/
+venv/
+.env
+.idea/
+.vs/
+*.user
+*.suo
+
+# OS
+.DS_Store
+Thumbs.db
